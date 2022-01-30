@@ -1,5 +1,5 @@
 use crate::error::{Result, Error};
-use crate::buffer::{BufferReader, SliceBufferReader};
+use crate::buffer::{BufferReader, BufferWriter, SliceBufferWriter, SliceBufferReader};
 
 pub fn write_u32<T: Into<u32>>(buf: &mut [u8], x: T) -> Result<usize> {
   if buf.len() < 4 {
@@ -49,39 +49,50 @@ pub fn read_u8(buf: &[u8], x: &mut u8) -> Result<usize> {
   Ok(1)
 }
 
+
+/////////////////////////////////////////////////
+// Implementation of variant integer encoding  //
+/////////////////////////////////////////////////
+
 pub const MAX_VARUINT_SIZE: usize = 10;
-
-pub fn write_varuint<T: Into<u64>>(buf: &mut [u8], x: T) -> Result<usize> {
-  let mut cursor = 0 as usize;
-  let mut x = x.into();
-
-  while x >= 0x80 {
-    if cursor >= buf.len() {
-      return Err(Error::BufferTooSmall);
-    }
-    buf[cursor] = 0x80 | x as u8;
-    x >>= 7;
-    cursor += 1;
-  }
-
-  if cursor >= buf.len() {
-    return Err(Error::BufferTooSmall);
-  }
-  buf[cursor] = x as u8;
-
-  Ok(cursor + 1)
-}
 
 pub fn varuint_size<T: Into<u64>>(x: T) -> usize {
   let mut size: usize = 1;
   let mut x = x.into();
-  
+
   while x >= 0x80 {
     x >>= 7;
     size += 1;
   }
 
   size
+  }
+
+pub fn write_varuint<T: Into<u64>>(buf: &mut [u8], x: T) -> Result<usize> {
+  let mut writer  = SliceBufferWriter::<u8>::new(buf);
+
+  buffer_write_varuint(&mut writer, x)
+}
+
+pub fn buffer_write_varuint<T: Into<u64>>(buffer: &mut impl BufferWriter<u8>, x: T) -> Result<usize> {
+  let mut x = x.into();
+  let mut local_buf: [u8; 1] = [0; 1];
+  let mut total_output: usize = 0;
+  
+  while x >= 0x80 {
+    local_buf[0] = 0x80 | x as u8;
+
+    buffer.write(&local_buf)?;
+
+    x >>= 7;
+
+    total_output += 1;
+  }
+
+  local_buf[0] = x as u8;
+  buffer.write(&local_buf)?;
+
+  Ok(total_output + 1)
 }
 
 pub fn read_varuint(buf: &[u8], x: &mut u64) -> Result<usize> {

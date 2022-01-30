@@ -1,6 +1,6 @@
-use crate::error::Result;
+use crate::error::{Result, Error};
 use std::collections::BTreeMap;
-use crate::encoding::{varuint_size, write_varuint, buffer_read_varuint, MAX_VARUINT_SIZE};
+use crate::encoding::{varuint_size, buffer_write_varuint, buffer_read_varuint};
 use crate::buffer::{BufferWriter, BufferReader};
 
 pub trait SerializableLogObject {
@@ -19,20 +19,13 @@ pub struct LogStateSnapshotRecord {
 
 impl SerializableLogObject for LogStateSnapshotRecord {
     fn serialize(&self, buffer: &mut impl BufferWriter<u8>) -> Result<usize> {
-        let mut local_buf: [u8; MAX_VARUINT_SIZE] = [0; MAX_VARUINT_SIZE];
         let mut total_written_size: usize = 0;
 
-        let mut written_size = write_varuint(&mut local_buf, self.sequence_ids.len() as u64)?;
-        total_written_size += buffer.write(&local_buf[..written_size])?;
+        total_written_size += buffer_write_varuint(buffer, self.sequence_ids.len() as u64)?;
 
         for (pv_id, seq) in &self.sequence_ids {
-            // pv_id
-            written_size = write_varuint(&mut local_buf, *pv_id)?;
-            total_written_size += buffer.write(&local_buf[..written_size])?;
-
-            // sequence id
-            written_size = write_varuint(&mut local_buf, *seq)?;
-            total_written_size += buffer.write(&local_buf[..written_size])?;
+            total_written_size += buffer_write_varuint(buffer, *pv_id)?;
+            total_written_size += buffer_write_varuint(buffer, *seq)?;
         }
 
         Ok(total_written_size)

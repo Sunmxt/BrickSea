@@ -19,7 +19,7 @@ fn log_state_record_serialize() {
 
     let mut buf_vec = MutBufferVector::<u8>::new();
     let mut buffer: [u8; EXPECTED_SERIALIZED_SIZE] = [0; EXPECTED_SERIALIZED_SIZE];
-    buf_vec.append_buffer(&mut buffer);
+    buf_vec.append_buffer_slice(&mut buffer);
     let mut buf_writer = buf_vec.new_writer();
 
     let result = record.serialize(&mut buf_writer);
@@ -50,7 +50,7 @@ fn log_state_record_serialize_buffer_too_small() {
     let mut buf_vec = MutBufferVector::<u8>::new();
     let mut buffer = Vec::<u8>::new();
     buffer.resize(expected_serialized_size - 1, 0);
-    buf_vec.append_buffer(&mut buffer);
+    buf_vec.append_buffer_slice(&mut buffer);
     let mut buf_writer = buf_vec.new_writer();
 
     let result = record.serialize(&mut buf_writer);
