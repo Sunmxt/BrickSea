@@ -1,7 +1,10 @@
 use crate::error::{Result, Error};
 use std::collections::BTreeMap;
-use crate::encoding::{varuint_size, buffer_write_varuint, buffer_read_varuint};
-use crate::buffer::{BufferWriter, BufferReader};
+use std::vec::Vec;
+use crate::encoding::{varuint_size, buffer_write_varuint, buffer_read_varuint,
+                      buffer_read_u64, buffer_write_u64,
+                      buffer_read_u8, buffer_write_u8};
+use crate::buffer::{BufferWriter, BufferReader, ImmutRefBufferVector};
 
 pub trait SerializableLogObject {
     fn serialize(&self, buffer: &mut impl BufferWriter<u8>) -> Result<usize>;
@@ -69,33 +72,148 @@ impl SerializableLogObject for LogStateSnapshotRecord {
 // Implementation of block write record        //
 /////////////////////////////////////////////////
 
-pub struct BlockWriteRecord<'a> {
-    pub block_id: u64,
+#[derive(Copy, Clone, PartialEq, Debug)]
+pub struct DataBlockDescriptionForRecord {
     pub offset: u32,
-    pub data: Option<&'a [u8]>,
+    pub size: u32,
+    pub flags: u8,
 }
 
-impl<'a> BlockWriteRecord<'a> {
-    pub fn new(block_id: u64, offset: u32, data: &[u8]) -> BlockWriteRecord {
-        BlockWriteRecord{
-            block_id,
-            offset,
-            data: Some(data),
+const DATA_BLOCK_DESC_FLAG_EXTENT_ATTACHMENT: u8 = 0x01;
+
+impl DataBlockDescriptionForRecord {
+    pub fn new() -> DataBlockDescriptionForRecord {
+        DataBlockDescriptionForRecord{
+            offset: 0,
+            size: 0,
+            flags: 0,
         }
     }
 
-    pub fn new_empty() -> BlockWriteRecord<'a> {
-        BlockWriteRecord{
-            block_id: 0,
-            offset: 0,
-            data: None,
+    pub fn has_extent_attachment(&self) -> bool {
+        self.flags & DATA_BLOCK_DESC_FLAG_EXTENT_ATTACHMENT != 0
+    }
+
+    pub fn config_extent_attachment(&mut self, enable: bool) {
+        if enable {
+            self.flags |= DATA_BLOCK_DESC_FLAG_EXTENT_ATTACHMENT;
+        } else {
+            self.flags &= !DATA_BLOCK_DESC_FLAG_EXTENT_ATTACHMENT;
         }
+    }
+}
+
+pub struct BlockWriteRecord {
+    pub block_id: u64,
+    pub extents: Vec<DataBlockDescriptionForRecord>,
+}
+
+impl BlockWriteRecord {
+    pub fn new(block_id: u64) -> BlockWriteRecord {
+        BlockWriteRecord{
+            block_id,
+            extents: Vec::<DataBlockDescriptionForRecord>::new(),
+        }
+    }
+
+    pub fn add_extent(&mut self, extent: &DataBlockDescriptionForRecord) {
+        self.extents.push(*extent);
+    }
+}
+
+impl SerializableLogObject for BlockWriteRecord {
+    fn serialize(&self, buffer: &mut impl BufferWriter<u8>) -> Result<usize> {
+        let mut total_written_size: usize = 0;
+
+        // block id
+        total_written_size += buffer_write_u64(buffer, self.block_id)?;
+
+        // extents
+        total_written_size += buffer_write_varuint(buffer, self.extents.len() as u64)?;
+        let mut sorted_extents = Vec::<DataBlockDescriptionForRecord>::new();
+        for extent in &self.extents {
+            sorted_extents.push(*extent);
+        }
+        sorted_extents.sort_by( |a, b| a.offset.cmp(&b.offset));
+
+        for extent in &sorted_extents {
+            total_written_size += buffer_write_varuint(buffer, extent.offset)?;
+            total_written_size += buffer_write_varuint(buffer, extent.size)?;
+            total_written_size += buffer_write_u8(buffer, extent.flags)?;
+        }
+
+        Ok(total_written_size)
+    }
+
+    fn deserialize(&mut self, buffer: &mut impl BufferReader<u8>) -> Result<usize> {
+        let mut total_consumed_size: usize = 0;
+
+        // block id.
+        total_consumed_size += buffer_read_u64(buffer, &mut self.block_id)?;
+
+        // extents.
+        let mut num_of_extents: u64 = 0;
+        let mut x: u64 = 0;
+        total_consumed_size += buffer_read_varuint(buffer, &mut num_of_extents)?;
+        self.extents.clear();
+        self.extents.reserve(num_of_extents as usize);
+        for _ in 0..num_of_extents {
+            let mut extent = DataBlockDescriptionForRecord::new();
+
+            // extent.offset
+            total_consumed_size += buffer_read_varuint(buffer, &mut x)?;
+            if x > std::u32::MAX as u64 {
+                return Err(Error::BadRecord)
+            }
+            extent.offset = x as u32;
+
+            // extent.size
+            total_consumed_size += buffer_read_varuint(buffer, &mut x)?;
+            if x > std::u32::MAX as u64 {
+                return Err(Error::BadRecord)
+            }
+            extent.size = x as u32;
+
+            // extent.flags
+            total_consumed_size += buffer_read_u8(buffer, &mut extent.flags)?;
+
+            self.extents.push(extent);
+        }
+
+        Ok(total_consumed_size)
+    }
+
+    fn size(&self) -> usize {
+        let mut total_size: usize = 8;
+
+        total_size += varuint_size(self.extents.len() as u64);
+        for extent in &self.extents {
+            total_size += varuint_size(extent.offset);
+            total_size += varuint_size(extent.size);
+            total_size += 1;
+            total_size += extent.size as usize;
+        }
+
+        total_size
     }
 }
 
 /////////////////////////////////////////////////
 // Implementation of wal block writer          //
 /////////////////////////////////////////////////
+
+pub struct BlockWriter {
+}
+
+impl BlockWriter {
+    pub fn push_record(&mut self, record: &impl SerializableLogObject) -> Result<()> {
+        Err(Error::NotImplemented)
+    }
+
+    pub fn push_write_block_record(&mut self, record: &BlockWriteRecord) -> Result<()> {
+        Err(Error::NotImplemented)
+    }
+}
 
 pub enum RecordContentType {
     LogStateSnapshot = 0,
@@ -108,7 +226,6 @@ pub enum RecordType {
     Middle = 2,
     Ending = 3,
 }
-
 
 //pub enum EntryContent {
 //    LogStateSnapshot(LogStateSnapshotRecord),

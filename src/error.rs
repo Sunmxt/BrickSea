@@ -3,6 +3,8 @@ pub enum Error {
     /* WAL Errors: */
     WALStreamNotFound,
 
+    BadRecord,
+
     NotImplemented,
     BufferTooSmall,
     BufferOverflow,
