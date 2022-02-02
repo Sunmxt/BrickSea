@@ -1,12 +1,19 @@
 #[derive(PartialEq, Debug)]
 pub enum Error {
     /* WAL Errors: */
-    WALStreamNotFound,
-
+    BlockSizeTooSmall,
     BadRecord,
+    BadBlockHeader,
+    BadChecksum,
+    BadBlockWrite,
+    BadRecordWrite,
+    RecordTooLong,
+    InvalidRecordType,
+    InvalidRecordContentType,
 
     NotImplemented,
     BufferTooSmall,
+    BufferTooLarge,
     BufferOverflow,
 }
 

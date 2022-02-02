@@ -7,4 +7,4 @@ proto:
 	protoc --rust_out=./src/view --grpc_out=./src/view --plugin=protoc-gen-grpc=`which grpc_rust_plugin` protocol/brick.proto
 
 test:
-	cargo test
+	RUST_BACKTRACE=1 cargo test --workspace
