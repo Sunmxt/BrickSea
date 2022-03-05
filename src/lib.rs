@@ -1,4 +1,5 @@
 pub mod wal;
+pub mod io;
 
 #[cfg(test)]
 mod tests {
