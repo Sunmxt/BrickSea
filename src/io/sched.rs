@@ -5,22 +5,22 @@ use std::collections::VecDeque;
 use super::{BlockFile, IOScheduler, IODescription,
             IOScheduleResult, SchedulerType};
 
-pub struct PrioriziedIOScheduler<OwnerT> {
-    requests: VecDeque<OwnerT>,
+pub struct PrioriziedIOScheduler<ContextT> {
+    requests: VecDeque<ContextT>,
 }
 
-impl<OwnerT> IOScheduler for PrioriziedIOScheduler<OwnerT> {
-    type OwnerT = OwnerT;
+impl<ContextT: Clone> IOScheduler for PrioriziedIOScheduler<ContextT> {
+    type ContextT = ContextT;
 
     fn scheduler_type() -> SchedulerType {
         SchedulerType::Prioritized
     }
 
-    fn submit(&mut self, io: IODescription<Self::OwnerT>) -> Result<()> {
+    fn submit(&mut self, io: IODescription<ContextT>) -> Result<()> {
         Err(Error::NotImplemented)
     }
 
-    fn schedule(&mut self) -> IOScheduleResult<Self::OwnerT> {
+    fn schedule(&mut self, submit_ios: &mut std::vec::Vec<IODescription<Self::ContextT>>) -> IOScheduleResult {
         IOScheduleResult::None
     }
 
@@ -30,22 +30,22 @@ impl<OwnerT> IOScheduler for PrioriziedIOScheduler<OwnerT> {
 }
 
 
-pub struct NoopIOScheduler<OwnerT> {
-    requests: VecDeque<OwnerT>,
+pub struct NoopIOScheduler<ContextT> {
+    requests: VecDeque<ContextT>,
 }
 
-impl<OwnerT> IOScheduler for NoopIOScheduler<OwnerT> {
-    type OwnerT = OwnerT;
+impl<ContextT: Clone> IOScheduler for NoopIOScheduler<ContextT> {
+    type ContextT = ContextT;
 
     fn scheduler_type() -> SchedulerType {
         SchedulerType::Noop
     }
 
-    fn submit(&mut self, io: IODescription<Self::OwnerT>) -> Result<()> {
+    fn submit(&mut self, io: IODescription<ContextT>) -> Result<()> {
         Err(Error::NotImplemented)
     }
 
-    fn schedule(&mut self) -> IOScheduleResult<Self::OwnerT> {
+    fn schedule(&mut self) -> IOScheduleResult {
         IOScheduleResult::None
     }
     
